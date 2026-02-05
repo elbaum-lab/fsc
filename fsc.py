@@ -46,20 +46,26 @@ def compute_fsc(a, **kwargs):
     a0,a1=checkerboard(a)
     return(fsc2(a0, a1, **kwargs))
 
-def fsc2(a1, a2, vox_size=1.0, bins=100, binsize=None):
+def fsc2(a1, a2, vox_size=1.0, bins=100, binsize=None, full=False):
     assert a1.shape==a2.shape, "Input volumes must have the same shape"
 
     freqs=rfftnfreq(a1.shape, d=vox_size)
     freqs=np.sqrt(sum((np.square(f) for f in freqs))).flatten()
+
+    a1=np.fft.rfftn(a1).flatten()
+    a2=np.fft.rfftn(a2).flatten()
+
+    if not full:
+        mask=freqs< (0.25/max(vox_size))
+        freqs=freqs[mask]
+        a1=a1[mask]
+        a2=a2[mask]
+
+    numerator=np.real(a1*a2.conj())
+    a1=np.square(np.abs(a1))
+    a2=np.square(np.abs(a2))
+
     fsort=np.argsort(freqs)
-
-    a1=np.fft.rfftn(a1)
-    a2=np.fft.rfftn(a2)
-    
-    numerator=np.real(a1*a2.conj()).flatten()
-    a1=np.square(np.abs(a1)).flatten()
-    a2=np.square(np.abs(a2)).flatten()
-
     freqs=freqs[fsort]
     numerator=numerator[fsort]
     a1=a1[fsort]
