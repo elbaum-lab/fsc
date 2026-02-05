@@ -42,52 +42,54 @@ def rfftnfreq(s, d=1.0, sparse=True):
     freqs.append(np.fft.rfftfreq(n_last, d=d_last))
     return(np.meshgrid(*freqs, sparse=sparse))
 
-def compute_fsc(a, vox_size=1.0, bins=100, binsize=None):
-    assert bins is None or binsize is None, "Only one of bins and binsize can be specified"
-    assert bins is not None or binsize is not None, "One of bins and binsize must be specified"
-
+def compute_fsc(a, **kwargs):
     a0,a1=checkerboard(a)
-    
-    a=np.fft.rfftn(a)
-    a0=np.fft.rfftn(a0)
-    a1=np.fft.rfftn(a1)
-    
-    numerator=np.real(a0*a1.conj()).flatten()
-    a0=np.square(np.abs(a0)).flatten()
-    a1=np.square(np.abs(a1)).flatten()
+    return(fsc2(a0, a1, **kwargs))
 
-    freqs=rfftnfreq(a.shape, d=vox_size)
+def fsc2(a1, a2, vox_size=1.0, bins=100, binsize=None):
+    assert a1.shape==a2.shape, "Input volumes must have the same shape"
+
+    freqs=rfftnfreq(a1.shape, d=vox_size)
     freqs=np.sqrt(sum((np.square(f) for f in freqs))).flatten()
     fsort=np.argsort(freqs)
+
+    a1=np.fft.rfftn(a1)
+    a2=np.fft.rfftn(a2)
     
+    numerator=np.real(a1*a2.conj()).flatten()
+    a1=np.square(np.abs(a1)).flatten()
+    a2=np.square(np.abs(a2)).flatten()
+
     freqs=freqs[fsort]
     numerator=numerator[fsort]
-    a0=a0[fsort]
     a1=a1[fsort]
+    a2=a2[fsort]
 
     if binsize is None:
+        assert bins is not None, "One of bins and binsize must be specified"
         binsize = len(freqs) // bins
+    else:
+        assert bins is None, "Only one of bins and binsize can be specified"
 
     pad=binsize-(len(freqs)-1)%binsize-1
     freqs=np.pad(freqs, (0,pad), mode='edge')
     numerator=np.pad(numerator, (0,pad), mode='edge')
-    a0=np.pad(a0, (0,pad), mode='edge')
     a1=np.pad(a1, (0,pad), mode='edge')
+    a2=np.pad(a2, (0,pad), mode='edge')
     
     freqs=freqs.reshape(-1,binsize)
     numerator=numerator.reshape(-1,binsize)
-    a0=a0.reshape(-1,binsize)
     a1=a1.reshape(-1,binsize)
-    
+    a2=a2.reshape(-1,binsize)    
     
     freqs=np.mean(freqs,axis=1)
     numerator=numerator.sum(axis=1)
-    a0=a0.sum(axis=1)
     a1=a1.sum(axis=1)
-    denominator=np.sqrt(a0*a1)
-    fsc=numerator/denominator
+    a2=a2.sum(axis=1)
+    denominator=np.sqrt(a1*a2)
+    result=numerator/denominator
 
-    return(freqs,fsc)
+    return(freqs, result)
 
 
 
@@ -108,8 +110,8 @@ if __name__=="__main__":
     lengthxyz=[s.cella.x/s.nx, s.cella.y/s.ny, s.cella.z/s.nz]
     axes = [s.mapc, s.mapr, s.maps]          # axes corresp to cols/rows/secs (1,2,3 for X,Y,Z)
 
-    freqs,fsc=compute_fsc(mrc.data.astype(np.float64), vox_size=[lengthxyz[a-1] for a in axes[::-1]], bins=args.bins, binsize=args.binsize)
+    freqs,corrs=compute_fsc(mrc.data.astype(np.float64), vox_size=[lengthxyz[a-1] for a in axes[::-1]], bins=args.bins, binsize=args.binsize)
 
-    for f, v in zip(freqs, fsc):
+    for f, v in zip(freqs, corrs):
         args.output.write(f"{f}\t{v}\n")
 
