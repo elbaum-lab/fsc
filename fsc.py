@@ -29,7 +29,7 @@ def fftnfreq(s, d=1.0, sparse=True):
     freqs=[]
     for n, spacing in np.nditer([s,d], casting='no'):
         freqs.append(np.fft.fftfreq(int(n), d=spacing))
-    return(np.meshgrid(*freqs, sparse=sparse))
+    return(np.meshgrid(*freqs, sparse=sparse, indexing='ij'))
 
 def rfftnfreq(s, d=1.0, sparse=True):
     freqs=None
@@ -40,7 +40,7 @@ def rfftnfreq(s, d=1.0, sparse=True):
             freqs.append(np.fft.fftfreq(n_last, d=d_last))
         n_last,d_last=int(n),spacing
     freqs.append(np.fft.rfftfreq(n_last, d=d_last))
-    return(np.meshgrid(*freqs, sparse=sparse))
+    return(np.meshgrid(*freqs, sparse=sparse, indexing='ij'))
 
 def compute_fsc(a, **kwargs):
     a0,a1=checkerboard(a)
