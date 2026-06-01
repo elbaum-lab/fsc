@@ -18,7 +18,7 @@ def checkerboard(a):
     """Split an array into even- and odd-parity checkerboard smoothed half-maps."""
     coords=np.ogrid[[slice(s) for s in a.shape]]
 
-    idx=(sum(coords)%2).astype(bool)
+    idx=np.asarray(sum(coords)%2, dtype=bool)
     a0=a.copy()
     a0[idx]=0
     a0=smooth(a0)
@@ -39,14 +39,18 @@ def fftnfreq(s, d=1.0, sparse=True):
 
 def rfftnfreq(s, d=1.0, sparse=True):
     """Return FFT frequency grids with a real FFT axis on the last dimension."""
-    freqs=None
-    for n, spacing in np.nditer([s,d], casting='no'):
-        if freqs is None:
-            freqs=[]
-        else:
-            freqs.append(np.fft.fftfreq(n_last, d=d_last))
-        n_last,d_last=int(n),spacing
-    freqs.append(np.fft.rfftfreq(n_last, d=d_last))
+    freqs=[]
+    it = np.nditer([s, d], casting='no')
+    try:
+        n_prev, d_prev = next(it)
+    except StopIteration as exc:
+        raise ValueError("shape must have at least one axis") from exc
+
+    for n, spacing in it:
+        freqs.append(np.fft.fftfreq(int(n_prev), d=float(d_prev)))
+        n_prev, d_prev = n, spacing
+
+    freqs.append(np.fft.rfftfreq(int(n_prev), d=float(d_prev)))
     return(np.meshgrid(*freqs, sparse=sparse, indexing='ij'))
 
 def compute_fsc(a, **kwargs):
@@ -113,7 +117,7 @@ def fsc2(a1, a2, vox_size=1.0, bins=100, binsize=None, full=False):
 if __name__=="__main__":
     import argparse
     import sys
-    import mrcfile
+    import mrcfile.mrcinterpreter
 
     parser = argparse.ArgumentParser(description="Compute FSC of a 3D volume")
     parser.add_argument("input", nargs='?', type=argparse.FileType('rb'), default=sys.stdin.buffer, help='Input MRC file (stdin)')
