@@ -2,6 +2,7 @@
 import numpy as np
 
 def smooth(a):
+    """Smooth an array by averaging nearest neighbors along each axis."""
     b=a.copy()
     for i in range(a.ndim):
         a=a.swapaxes(0,i)
@@ -14,16 +15,20 @@ def smooth(a):
     return(b)
 
 def checkerboard(a):
+    """Split an array into even- and odd-parity checkerboard smoothed half-maps."""
     coords=np.ogrid[[slice(s) for s in a.shape]]
-    idx1=(sum(coords)%2).astype(bool)
-    idx0=np.logical_not(idx1)
 
+    idx=(sum(coords)%2).astype(bool)
     a0=a.copy()
+    a0[idx]=0
+    a0=smooth(a0)
+
+    idx=np.logical_not(idx)
     a1=a.copy()
-    a0[idx1]=0
-    a1[idx0]=0
-    
-    return(smooth(a0),smooth(a1))
+    a1[idx]=0
+    a1=smooth(a1)
+
+    return(a0, a1)
 
 def fftnfreq(s, d=1.0, sparse=True):
     freqs=[]
