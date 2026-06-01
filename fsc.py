@@ -31,12 +31,14 @@ def checkerboard(a):
     return(a0, a1)
 
 def fftnfreq(s, d=1.0, sparse=True):
+    """Return FFT frequency grids for all axes of a real-valued array."""
     freqs=[]
     for n, spacing in np.nditer([s,d], casting='no'):
         freqs.append(np.fft.fftfreq(int(n), d=spacing))
     return(np.meshgrid(*freqs, sparse=sparse, indexing='ij'))
 
 def rfftnfreq(s, d=1.0, sparse=True):
+    """Return FFT frequency grids with a real FFT axis on the last dimension."""
     freqs=None
     for n, spacing in np.nditer([s,d], casting='no'):
         if freqs is None:
@@ -48,11 +50,16 @@ def rfftnfreq(s, d=1.0, sparse=True):
     return(np.meshgrid(*freqs, sparse=sparse, indexing='ij'))
 
 def compute_fsc(a, **kwargs):
+    """Compute FSC for a volume by splitting it into checkerboard half-maps."""
     a0,a1=checkerboard(a)
     return(fsc2(a0, a1, **kwargs))
 
 def fsc2(a1, a2, vox_size=1.0, bins=100, binsize=None, full=False):
+    """Compute the Fourier shell correlation between two equally shaped volumes."""
     assert a1.shape==a2.shape, "Input volumes must have the same shape"
+
+    if np.ndim(vox_size) == 0:
+        vox_size = [vox_size]
 
     freqs=rfftnfreq(a1.shape, d=vox_size)
     freqs=np.sqrt(sum((np.square(f) for f in freqs))).flatten()
@@ -76,11 +83,10 @@ def fsc2(a1, a2, vox_size=1.0, bins=100, binsize=None, full=False):
     a1=a1[fsort]
     a2=a2[fsort]
 
+    if (binsize is None) == (bins is None):
+        raise AssertionError("Specify exactly one of bins or binsize")
     if binsize is None:
-        assert bins is not None, "One of bins and binsize must be specified"
         binsize = len(freqs) // bins
-    else:
-        assert bins is None, "Only one of bins and binsize can be specified"
 
     pad=binsize-(len(freqs)-1)%binsize-1
     freqs=np.pad(freqs, (0,pad), mode='edge')
