@@ -60,6 +60,7 @@ def compute_fsc(a, **kwargs):
 
 def fsc2(a1, a2, vox_size=1.0, bins=100, binsize=None, full=False):
     """Compute the Fourier shell correlation between two equally shaped volumes."""
+    """non-uniform binning to keep equal variance"""
     assert a1.shape==a2.shape, "Input volumes must have the same shape"
 
     if np.ndim(vox_size) == 0:
@@ -119,19 +120,34 @@ if __name__=="__main__":
     import sys
     import mrcfile.mrcinterpreter
 
-    parser = argparse.ArgumentParser(description="Compute FSC of a 3D volume")
-    parser.add_argument("input", nargs='?', type=argparse.FileType('rb'), default=sys.stdin.buffer, help='Input MRC file (stdin)')
+    parser = argparse.ArgumentParser(description="Compute FSC of a 3D volume or between two volumes")
+    parser.add_argument("input", nargs='*', type=argparse.FileType('rb'), help='Input MRC file(s) (stdin if omitted)')
     parser.add_argument("--bins", type=int, default=100, help="Number of bins")
     parser.add_argument("--binsize", type=int, default=None, help="Size of bins")
     parser.add_argument("--output", nargs='?', type=argparse.FileType('w'), default="-", help="Output text file")
     args = parser.parse_args()
 
-    mrc=mrcfile.mrcinterpreter.MrcInterpreter(iostream=args.input)
-    s=mrc.header
-    lengthxyz=[s.cella.x/s.nx, s.cella.y/s.ny, s.cella.z/s.nz]
-    axes = [s.mapc, s.mapr, s.maps]          # axes corresp to cols/rows/secs (1,2,3 for X,Y,Z)
+    # Default to stdin if no arguments are passed
+    if not args.input:
+        args.input = [sys.stdin.buffer]
 
-    freqs,corrs=compute_fsc(mrc.data.astype(np.float64), vox_size=[lengthxyz[a-1] for a in axes[::-1]], bins=args.bins, binsize=args.binsize)
+    if len(args.input) > 2:
+        parser.error("A maximum of two input files are supported.")
+
+    mrc1 = mrcfile.mrcinterpreter.MrcInterpreter(iostream=args.input[0])
+    s1 = mrc1.header
+    lengthxyz = [s1.cella.x/s1.nx, s1.cella.y/s1.ny, s1.cella.z/s1.nz]
+    axes = [s1.mapc, s1.mapr, s1.maps]          # axes corresp to cols/rows/secs (1,2,3 for X,Y,Z)
+    vox_size = [lengthxyz[a-1] for a in axes[::-1]]
+
+    data1 = mrc1.data.astype(np.float64)
+
+    if len(args.input) == 1:
+        freqs, corrs = compute_fsc(data1, vox_size=vox_size, bins=args.bins, binsize=args.binsize)
+    else:
+        mrc2 = mrcfile.mrcinterpreter.MrcInterpreter(iostream=args.input[1])
+        data2 = mrc2.data.astype(np.float64)
+        freqs, corrs = fsc2(data1, data2, vox_size=vox_size, bins=args.bins, binsize=args.binsize)
 
     for f, v in zip(freqs, corrs):
         args.output.write(f"{f}\t{v}\n")
