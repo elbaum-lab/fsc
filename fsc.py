@@ -93,11 +93,12 @@ def fsc2(a1, a2, vox_size=1.0, bins=100, binsize=None, nyquist=0.5, full=False):
     if binsize is None:
         binsize = len(freqs) // bins
 
-    pad=binsize-(len(freqs)-1)%binsize-1
-    freqs=np.pad(freqs, (0,pad), mode='edge')
-    numerator=np.pad(numerator, (0,pad), mode='edge')
-    a1=np.pad(a1, (0,pad), mode='edge')
-    a2=np.pad(a2, (0,pad), mode='edge')
+    remainder = len(freqs) % binsize
+    if remainder != 0:
+        freqs = freqs[:-remainder]
+        numerator = numerator[:-remainder]
+        a1 = a1[:-remainder]
+        a2 = a2[:-remainder]
     
     freqs=freqs.reshape(-1,binsize)
     numerator=numerator.reshape(-1,binsize)
