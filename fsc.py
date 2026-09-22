@@ -56,9 +56,9 @@ def rfftnfreq(s, d=1.0, sparse=True):
 def compute_fsc(a, **kwargs):
     """Compute FSC for a volume by splitting it into checkerboard half-maps."""
     a0,a1=checkerboard(a)
-    return(fsc2(a0, a1, **kwargs))
+    return(fsc2(a0, a1, nyquist=0.25, **kwargs))
 
-def fsc2(a1, a2, vox_size=1.0, bins=100, binsize=None, full=False):
+def fsc2(a1, a2, vox_size=1.0, bins=100, binsize=None, nyquist=0.5, full=False):
     """Compute the Fourier shell correlation between two equally shaped volumes."""
     """non-uniform binning to keep equal variance"""
     assert a1.shape==a2.shape, "Input volumes must have the same shape"
@@ -73,7 +73,7 @@ def fsc2(a1, a2, vox_size=1.0, bins=100, binsize=None, full=False):
     a2=np.fft.rfftn(a2).flatten()
 
     if not full:
-        mask=freqs< (0.25/max(vox_size))
+        mask=freqs < (nyquist/max(vox_size))
         freqs=freqs[mask]
         a1=a1[mask]
         a2=a2[mask]
@@ -125,6 +125,7 @@ if __name__=="__main__":
     parser.add_argument("--bins", type=int, default=100, help="Number of bins")
     parser.add_argument("--binsize", type=int, default=None, help="Size of bins")
     parser.add_argument("--output", nargs='?', type=argparse.FileType('w'), default="-", help="Output text file")
+    parser.add_argument("--full", action='store_true', help="Compute full FSC (BEWARE)")
     args = parser.parse_args()
 
     # Default to stdin if no arguments are passed
@@ -143,11 +144,11 @@ if __name__=="__main__":
     data1 = mrc1.data.astype(np.float64)
 
     if len(args.input) == 1:
-        freqs, corrs = compute_fsc(data1, vox_size=vox_size, bins=args.bins, binsize=args.binsize)
+        freqs, corrs = compute_fsc(data1, vox_size=vox_size, bins=args.bins, binsize=args.binsize, full=args.full)
     else:
         mrc2 = mrcfile.mrcinterpreter.MrcInterpreter(iostream=args.input[1])
         data2 = mrc2.data.astype(np.float64)
-        freqs, corrs = fsc2(data1, data2, vox_size=vox_size, bins=args.bins, binsize=args.binsize)
+        freqs, corrs = fsc2(data1, data2, vox_size=vox_size, bins=args.bins, binsize=args.binsize, full=args.full)
 
     for f, v in zip(freqs, corrs):
         args.output.write(f"{f}\t{v}\n")
