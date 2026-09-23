@@ -63,10 +63,11 @@ def fsc2(a1, a2, vox_size=1.0, bins=100, binsize=None, nyquist=0.5, full=False):
     """non-uniform binning to keep equal variance"""
     assert a1.shape==a2.shape, "Input volumes must have the same shape"
 
+    orig_shape = a1.shape
     if np.ndim(vox_size) == 0:
         vox_size = [vox_size]
 
-    freqs=rfftnfreq(a1.shape, d=vox_size)
+    freqs=rfftnfreq(orig_shape, d=vox_size)
     freqs=np.sqrt(sum((np.square(f) for f in freqs))).flatten()
 
     a1=np.fft.rfftn(a1).flatten()
@@ -82,38 +83,52 @@ def fsc2(a1, a2, vox_size=1.0, bins=100, binsize=None, nyquist=0.5, full=False):
     a1=np.square(np.abs(a1))
     a2=np.square(np.abs(a2))
 
-    fsort=np.argsort(freqs)
-    freqs=freqs[fsort]
-    numerator=numerator[fsort]
-    a1=a1[fsort]
-    a2=a2[fsort]
 
     if (binsize is None) == (bins is None):
         raise AssertionError("Specify exactly one of bins or binsize")
-    if binsize is None:
-        binsize = len(freqs) // bins
 
-    remainder = len(freqs) % binsize
-    if remainder != 0:
-        freqs = freqs[:-remainder]
-        numerator = numerator[:-remainder]
-        a1 = a1[:-remainder]
-        a2 = a2[:-remainder]
+    target_pop = len(freqs) // bins if binsize is None else binsize
     
-    freqs=freqs.reshape(-1,binsize)
-    numerator=numerator.reshape(-1,binsize)
-    a1=a1.reshape(-1,binsize)
-    a2=a2.reshape(-1,binsize)    
+    fundamental_step = 1.0 / (max(orig_shape) * max(vox_size)) 
+    min_width = 3.0 * fundamental_step  
     
-    freqs=np.mean(freqs,axis=1)
-    numerator=numerator.sum(axis=1)
-    a1=a1.sum(axis=1)
-    a2=a2.sum(axis=1)
-    denominator=np.sqrt(a1*a2)
-    result=numerator/denominator
+    # high-resolution 1D histogram
+    fine_bins = max(int(np.max(freqs) / (fundamental_step / 4.0)), 10)
+    fine_counts, fine_edges = np.histogram(freqs, bins=fine_bins)
 
-    return(freqs, result)
+    # dynamically determine actual bin edges
+    bin_edges = [0.0]
+    current_pop = 0
 
+    for edge, count in zip(fine_edges[1:], fine_counts):
+        current_pop += count
+        if current_pop >= target_pop and (edge - bin_edges[-1]) >= min_width:
+            bin_edges.append(edge)
+            current_pop = 0
+
+    bin_edges[-1] = fine_edges[-1] + 1e-5 
+
+    # assign voxels to dynamic bins and accumulate
+    bin_indices = np.digitize(freqs, bin_edges) - 1
+    bin_indices = np.clip(bin_indices, 0, len(bin_edges) - 2)
+    num_bins = len(bin_edges) - 1
+
+    num_sum = np.bincount(bin_indices, weights=numerator, minlength=num_bins)
+    a1_sum = np.bincount(bin_indices, weights=a1, minlength=num_bins)
+    a2_sum = np.bincount(bin_indices, weights=a2, minlength=num_bins)
+    voxel_counts = np.bincount(bin_indices, minlength=num_bins)
+
+    # calculate final binned frequencies and FSC
+    valid_bins = voxel_counts > 0
+    freqs_binned = np.zeros(num_bins, dtype=np.float64)
+    freqs_binned[valid_bins] = np.bincount(bin_indices, weights=freqs, minlength=num_bins)[valid_bins] / voxel_counts[valid_bins]
+
+    denominator = np.sqrt(a1_sum * a2_sum)
+    result = np.zeros(num_bins, dtype=np.float64)
+    valid_denom = denominator > 0
+    result[valid_denom] = num_sum[valid_denom] / denominator[valid_denom]
+
+    return freqs_binned[valid_bins], result[valid_bins]
 
 
 if __name__=="__main__":
